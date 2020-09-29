@@ -44,7 +44,7 @@ class prbt_bridge {
         ros::Publisher current_state_position_publisher, prbt_position_reached_publisher;
         ros::Publisher operation_mode_publisher;
 
-        ros::Subscriber trajectory_subscriber;
+        ros::Subscriber trajectory_subscriber, dynamic_trajectory_subscriber;
         ros::Subscriber current_position_subscriber;
 
         trajectory_msgs::JointTrajectory planned_trajectory, next_point;
@@ -64,6 +64,7 @@ class prbt_bridge {
 
         ros::Time begin;
 
+        bool dynamic_planning = false;
         int trajectory_counter = 0;
         bool idle_publisher = true;
         float tolerance = 0;
@@ -72,6 +73,7 @@ class prbt_bridge {
 
         void Planned_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &);
         void Current_Position_Callback (const control_msgs::JointTrajectoryControllerState::ConstPtr &);
+        void Dynamic_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &);
 
         void Compute_Tolerance(trajectory_msgs::JointTrajectory planned_trajectory);
         float Compute_Position_Error (void);

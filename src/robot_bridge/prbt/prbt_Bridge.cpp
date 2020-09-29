@@ -42,6 +42,7 @@ prbt_bridge::prbt_bridge () {
 // Initialize Publishers and Subscribers
 
     trajectory_subscriber = nh.subscribe("/Robot_Bridge/prbt_Planned_Trajectory", 1000, &prbt_bridge::Planned_Trajectory_Callback, this);
+    dynamic_trajectory_subscriber = nh.subscribe("/Robot_Bridge/prbt_Dynamic_Trajectory", 1000, &prbt_bridge::Dynamic_Trajectory_Callback, this);
     current_position_subscriber = nh.subscribe("/prbt/manipulator_joint_trajectory_controller/state", 1000, &prbt_bridge::Current_Position_Callback, this);
 
     trajectory_counter_publisher = nh.advertise<std_msgs::Int32>("/Robot_Bridge/prbt_Trajectory_Counter", 1);
@@ -71,15 +72,42 @@ prbt_bridge::prbt_bridge () {
 //------------------------------------------------------ CALLBACK ------------------------------------------------------//
 
 
-void prbt_bridge::Planned_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &planned_trajectory_msg) {
+void prbt_bridge::Planned_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &msg) {
 
-    planned_trajectory = *planned_trajectory_msg;
+    planned_trajectory = *msg;
+    dynamic_planning = false;
+
+    while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
+
+        // set operation mode to auto
+        prbt_hardware_support::OperationModes operation_mode;
+        operation_mode.time_stamp = ros::Time::now();
+        operation_mode.value = 3; //AUTO
+        operation_mode_publisher.publish(operation_mode);
+        
+    }
+
+    // Turn off Hold Mode
+    if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
+
+    // Turn off Speed Monitoring (Useless in AUTO Mode)
+    // prbt_monitor_cartesian_speed_srv.request.data = false;
+    // if (prbt_monitor_cartesian_speed_client.call(prbt_monitor_cartesian_speed_srv)) {ROS_INFO("Speed Monitoring Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_monitor_cartesian_speed\"");}
+
+    Publish_Next_Goal(planned_trajectory);
 
 }
 
-void prbt_bridge::Current_Position_Callback (const control_msgs::JointTrajectoryControllerState::ConstPtr &current_position_msg) {
+void prbt_bridge::Dynamic_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &msg) {
 
-    current_position = *current_position_msg;
+    planned_trajectory = *msg;
+    dynamic_planning = true;
+
+}
+
+void prbt_bridge::Current_Position_Callback (const control_msgs::JointTrajectoryControllerState::ConstPtr &msg) {
+
+    current_position = *msg;
     current_state_position_publisher.publish(current_position);
 
 }
@@ -90,7 +118,8 @@ void prbt_bridge::Current_Position_Callback (const control_msgs::JointTrajectory
 
 void prbt_bridge::Publish_Next_Goal (trajectory_msgs::JointTrajectory goal) {
 
-    ROS_INFO("PRBT GOTO (%.2f;%.2f;%.2f;%.2f;%.2f;%.2f)", goal.points[0].positions[0], goal.points[0].positions[1], goal.points[0].positions[2], goal.points[0].positions[3], goal.points[0].positions[4], goal.points[0].positions[5]);
+    int end = goal.points.size() - 1;
+    ROS_INFO("PRBT GOTO (%.2f;%.2f;%.2f;%.2f;%.2f;%.2f)", goal.points[end].positions[0], goal.points[end].positions[1], goal.points[end].positions[2], goal.points[end].positions[3], goal.points[end].positions[4], goal.points[end].positions[5]);
 
     // manipulator_joint_trajectory_controller_command_publisher.publish(goal); // old control topic
     
@@ -233,66 +262,71 @@ void prbt_bridge::spinner (void) {
 
     ros::spinOnce();
 
-    while ((trajectory_counter < planned_trajectory.points.size()) && (planned_trajectory.points.size() != 0)) {
+    if (dynamic_planning) {
 
-        if (trajectory_counter == 0) {  //new trajectory
+        while ((trajectory_counter < planned_trajectory.points.size()) && (planned_trajectory.points.size() != 0)) {
 
-            Compute_Tolerance(planned_trajectory);
+            if (trajectory_counter == 0) {  //new trajectory
 
-            while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
+                Compute_Tolerance(planned_trajectory);
 
-                // set operation mode to auto
-                prbt_hardware_support::OperationModes operation_mode;
-                operation_mode.time_stamp = ros::Time::now();
-                operation_mode.value = 3; //AUTO
-                operation_mode_publisher.publish(operation_mode);
-                
+                while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
+
+                    // set operation mode to auto
+                    prbt_hardware_support::OperationModes operation_mode;
+                    operation_mode.time_stamp = ros::Time::now();
+                    operation_mode.value = 3; //AUTO
+                    operation_mode_publisher.publish(operation_mode);
+                    
+                }
+
+                // Turn off Hold Mode
+                if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
+
+                // Turn off Speed Monitoring
+                prbt_monitor_cartesian_speed_srv.request.data = false;
+                if (prbt_monitor_cartesian_speed_client.call(prbt_monitor_cartesian_speed_srv)) {ROS_INFO("Speed Monitoring Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_monitor_cartesian_speed\"");}
+
             }
 
-            // Turn off Hold Mode
-            if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
+            //final position not reached
+            position_reached.data = false;
+            prbt_position_reached_publisher.publish(position_reached);
 
-            // Turn off Speed Monitoring
-            prbt_monitor_cartesian_speed_srv.request.data = false;
-            if (prbt_monitor_cartesian_speed_client.call(prbt_monitor_cartesian_speed_srv)) {ROS_INFO("Speed Monitoring Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_monitor_cartesian_speed\"");}
+            //check the trajectory for dynamic replanning
+            ros::spinOnce();
+
+            Next_Goal(planned_trajectory, trajectory_counter);  //compute next goal
+
+            Publish_Trajectory_Counter(trajectory_counter); 
+            Publish_Next_Goal(next_point);
+            
+            begin = ros::Time::now();
+            Wait_For_Desired_Position();    //wait until the tolerance is achieved
+
+            trajectory_counter++;
 
         }
 
-        //final position not reached
-        position_reached.data = false;
-        prbt_position_reached_publisher.publish(position_reached);
+        if (trajectory_counter != 0) {
 
-        //check the trajectory for dynamic replanning
-        ros::spinOnce();
+                //final position reached
+                position_reached.data = true;
+                prbt_position_reached_publisher.publish(position_reached);
 
-        Next_Goal(planned_trajectory, trajectory_counter);  //compute next goal
+                // Turn on Hold Mode
+                if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
 
-        Publish_Trajectory_Counter(trajectory_counter); 
-        Publish_Next_Goal(next_point);
-        
-        begin = ros::Time::now();
-        Wait_For_Desired_Position();    //wait until the tolerance is achieved
+                trajectory_counter = 0;
 
-        trajectory_counter++;
+                planned_trajectory.points.clear();
+                next_point.points.clear();
 
-    }
+                idle_publisher = true;
+                dynamic_planning = false;
 
-    if (trajectory_counter != 0) {
-
-            //final position reached
-            position_reached.data = true;
-            prbt_position_reached_publisher.publish(position_reached);
-
-            // Turn on Hold Mode
-            if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
-
-            trajectory_counter = 0;
-
-            planned_trajectory.points.clear();
-            next_point.points.clear();
-
-            idle_publisher = true;
-
+        }
+    
     }
 
 }
