@@ -14,7 +14,7 @@ The other two nodes use thoose message to control directly the manipulator and t
 
 Run the node
 
-```roslaunch robot_bridge Bridge.launch```
+```roslaunch robot_bridge bridge.launch```
 
 ## Version
 
