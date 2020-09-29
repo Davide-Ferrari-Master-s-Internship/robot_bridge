@@ -65,12 +65,3 @@ add_dependencies(prbt_Bridge_Node ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_E
 
 ##################################################################################################
 
-# CMD Controller
-
-add_executable(prbt_cmd_controller_Node 
-	src/prbt_cmd_controller/prbt_cmd_controller_Node.cpp 
-	src/prbt_cmd_controller/prbt_cmd_controller.cpp)
-target_link_libraries(prbt_cmd_controller_Node ${catkin_LIBRARIES})
-add_dependencies(prbt_cmd_controller_Node ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
-
-##################################################################################################

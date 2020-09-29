@@ -57,8 +57,13 @@ prbt_bridge::prbt_bridge () {
 // Operation Mode
 
     prbt_unhold_client = nh.serviceClient<std_srvs::Trigger>("/prbt/manipulator_joint_trajectory_controller/unhold");
+    prbt_hold_client = nh.serviceClient<std_srvs::Trigger>("/prbt/manipulator_joint_trajectory_controller/hold");
+    prbt_monitor_cartesian_speed_client = nh.serviceClient<std_srvs::SetBool>("/prbt/manipulator_joint_trajectory_controller/monitor_cartesian_speed");
     get_speed_override_client = nh.serviceClient<pilz_msgs::GetSpeedOverride>("/prbt/get_speed_override");
     operation_mode_publisher = nh.advertise<prbt_hardware_support::OperationModes>("/prbt/operation_mode", 1);
+
+    trajectory_counter = 0;
+    position_reached.data = false;
 
 }
 
@@ -89,36 +94,18 @@ void prbt_bridge::Publish_Next_Goal (trajectory_msgs::JointTrajectory goal) {
 
     // manipulator_joint_trajectory_controller_command_publisher.publish(goal); // old control topic
     
-    while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
+    if (action_decision) {
 
-        // set operation mode to auto
-        prbt_hardware_support::OperationModes operation_mode;
-        operation_mode.time_stamp = ros::Time::now();
-        operation_mode.value = 3; //AUTO
-        operation_mode_publisher.publish(operation_mode);
-        
+        trajectory_goal.trajectory = goal;
+        trajectory_client -> waitForServer();
+        trajectory_client -> sendGoal(trajectory_goal);
+
+    } else {
+
+        trajectory_action.goal.trajectory = goal;
+        manipulator_action_controller_publisher.publish(trajectory_action);
+
     }
-
-    if (prbt_unhold_client.call(prbt_unhold_srv)) {
-        
-        ROS_INFO("Hold Mode Deactivated");
-
-        if (action_decision) {
-
-            trajectory_goal.trajectory = goal;
-            trajectory_client -> waitForServer();
-            trajectory_client -> sendGoal(trajectory_goal);
-
-        } else {
-
-            trajectory_action.goal.trajectory = goal;
-            manipulator_action_controller_publisher.publish(trajectory_action);
-
-        }
-        
-    } else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
-
-
 
 }
 
@@ -166,12 +153,7 @@ void prbt_bridge::Next_Goal (trajectory_msgs::JointTrajectory planned_trajectory
     next_point.joint_names = planned_trajectory.joint_names;
     next_point.points.resize(1);
     next_point.points[0] = planned_trajectory.points[counter];
-
-    if (next_point.points[0].time_from_start.toSec() == 0) {
-        
-        next_point.points[0].time_from_start = ros::Duration (sampling_time/1000);
-        
-    } else {next_point.points[0].time_from_start = ros::Duration (sampling_time);}
+    next_point.points[0].time_from_start = ros::Duration (sampling_time);
 
     Check_Joint_Limits(&next_point);
 
@@ -188,7 +170,8 @@ void prbt_bridge::Compute_Tolerance (trajectory_msgs::JointTrajectory planned_tr
 
     /*
 
-    2° Equation (matlab polyfit with 4 sperimental points):     y = a*x^2 + b*x + c
+    1° Equation (matlab polyfit with 4 sperimental points):     y = m*x + q             ->      y = 0.2057*x - 0.0027
+    2° Equation (matlab polyfit with 4 sperimental points):     y = a*x^2 + b*x + c     ->      y = -0.0368 * x^2 + 0.2255 *x - 0.0035
 
     Points (sampling time, tolerance):
 
@@ -196,10 +179,11 @@ void prbt_bridge::Compute_Tolerance (trajectory_msgs::JointTrajectory planned_tr
     
     */
 
+    float m = 0.2057, q = -0.0027;
+    float a = -0.0368, b = 0.2255, c = -0.0035;
 
-    float a = -0.0368, b = 0.2255, c = 0.035;
-
-    tolerance = fabs(a*pow(sampling_time,2) + b*sampling_time + c);
+    // tolerance = fabs(a*pow(sampling_time,2) + b*sampling_time + c);
+    tolerance = fabs(m * sampling_time + q);
 
     ROS_INFO("Sampling Time: %f",sampling_time);
     ROS_INFO("Position Tolerance: %f",tolerance);
@@ -219,11 +203,23 @@ void prbt_bridge::Wait_For_Desired_Position (void) {
 
     position_error = tolerance + 1;         //needed to enter the while condition  
 
-    while ((position_error > tolerance) && (fabs((begin - ros::Time::now()).toSec()) < (sampling_time * 0.85))) {    //wait for reaching desired position
+    while ((position_error > tolerance) || (fabs((begin - ros::Time::now()).toSec()) < (sampling_time * 0.85))) {    //wait for reaching desired position
+        
+        ros::spinOnce();
 
         position_error = Compute_Position_Error();
 
-        ros::spinOnce();
+    if (fabs((begin - ros::Time::now()).toSec()) > 10 * sampling_time) {
+        
+        ROS_ERROR("Wait for Desired Position Error.");
+        ROS_ERROR("Stop Trajectory Execution.");
+
+        // force while exit
+        trajectory_counter = planned_trajectory.points.size();
+
+        return;
+
+        }
 
     }
 
@@ -243,6 +239,23 @@ void prbt_bridge::spinner (void) {
 
             Compute_Tolerance(planned_trajectory);
 
+            while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
+
+                // set operation mode to auto
+                prbt_hardware_support::OperationModes operation_mode;
+                operation_mode.time_stamp = ros::Time::now();
+                operation_mode.value = 3; //AUTO
+                operation_mode_publisher.publish(operation_mode);
+                
+            }
+
+            // Turn off Hold Mode
+            if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
+
+            // Turn off Speed Monitoring
+            prbt_monitor_cartesian_speed_srv.request.data = false;
+            if (prbt_monitor_cartesian_speed_client.call(prbt_monitor_cartesian_speed_srv)) {ROS_INFO("Speed Monitoring Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_monitor_cartesian_speed\"");}
+
         }
 
         //final position not reached
@@ -254,8 +267,8 @@ void prbt_bridge::spinner (void) {
 
         Next_Goal(planned_trajectory, trajectory_counter);  //compute next goal
 
-        Publish_Trajectory_Counter(trajectory_counter);     //publish on topic "PC_Controller/prbt_Trajectory_Counter"
-        Publish_Next_Goal(next_point);                      //publish next goal on prbt topic
+        Publish_Trajectory_Counter(trajectory_counter); 
+        Publish_Next_Goal(next_point);
         
         begin = ros::Time::now();
         Wait_For_Desired_Position();    //wait until the tolerance is achieved
@@ -270,6 +283,9 @@ void prbt_bridge::spinner (void) {
             position_reached.data = true;
             prbt_position_reached_publisher.publish(position_reached);
 
+            // Turn on Hold Mode
+            if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
+
             trajectory_counter = 0;
 
             planned_trajectory.points.clear();
@@ -278,9 +294,5 @@ void prbt_bridge::spinner (void) {
             idle_publisher = true;
 
     }
-
-
-    // Current_Position_Maintainment();     //in order to avoit robot crash -> suspended
-
 
 }

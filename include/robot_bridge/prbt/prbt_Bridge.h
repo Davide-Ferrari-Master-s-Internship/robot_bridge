@@ -16,6 +16,7 @@
 
 #include "prbt_hardware_support/BrakeTest.h"
 #include "std_srvs/Trigger.h"
+#include "std_srvs/SetBool.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,8 +55,9 @@ class prbt_bridge {
 		control_msgs::FollowJointTrajectoryActionGoal trajectory_action;
 		control_msgs::FollowJointTrajectoryGoal trajectory_goal;
 
-        ros::ServiceClient prbt_unhold_client, get_speed_override_client;
-        std_srvs::Trigger prbt_unhold_srv;
+        ros::ServiceClient prbt_unhold_client, prbt_hold_client, get_speed_override_client, prbt_monitor_cartesian_speed_client;
+        std_srvs::Trigger prbt_unhold_srv, prbt_hold_srv;
+        std_srvs::SetBool prbt_monitor_cartesian_speed_srv;
         pilz_msgs::GetSpeedOverride get_speed_override_srv;
 
         std_msgs::Bool position_reached;

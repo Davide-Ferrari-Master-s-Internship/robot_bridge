@@ -1,6 +1,0 @@
-<launch>
-	
-	<!--	prbt cmd controller Node	-->
-	<node pkg="robot_bridge" type="prbt_cmd_controller_Node" name="prbt_cmd_controller_Node" output="screen"/>
-
-</launch>
