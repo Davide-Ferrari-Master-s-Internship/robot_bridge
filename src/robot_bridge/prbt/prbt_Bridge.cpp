@@ -232,6 +232,7 @@ void prbt_bridge::Wait_For_Desired_Position (bool dynamic) {
         while (fabs((begin - ros::Time::now()).toSec()) < sampling_time * planned_trajectory.points.size()) {
             
             ros::spinOnce();
+
             if (new_static_trajectory_received || new_dynamic_trajectory_received) {break;}
             
         }
@@ -318,6 +319,7 @@ void prbt_bridge::spinner (void) {
                 prbt_position_reached_publisher.publish(position_reached);
 
                 // Turn on Hold Mode
+                ros::Duration(2).sleep();
                 if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
 
                 planned_trajectory.points.clear();
@@ -362,6 +364,7 @@ void prbt_bridge::spinner (void) {
             prbt_position_reached_publisher.publish(position_reached);
 
             // Turn on Hold Mode
+            ros::Duration(2).sleep();
             if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
 
             planned_trajectory.points.clear();
