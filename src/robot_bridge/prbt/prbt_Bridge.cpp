@@ -353,6 +353,7 @@ void prbt_bridge::spinner (void) {
         // Turn off Hold Mode
         if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
 
+        Check_Joint_Limits(&planned_trajectory);
         Publish_Next_Goal(planned_trajectory);
 
         // Wait Until Position is Reached
