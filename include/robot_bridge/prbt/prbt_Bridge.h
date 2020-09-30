@@ -39,18 +39,14 @@ class prbt_bridge {
         ros::NodeHandle nh;
 
         // ros::Publisher manipulator_joint_trajectory_controller_command_publisher; // OLD PUBLISHER TOPIC
-        ros::Publisher manipulator_action_controller_publisher;
-        ros::Publisher trajectory_counter_publisher;
+        ros::Publisher manipulator_action_controller_publisher, trajectory_counter_publisher, operation_mode_publisher;
         ros::Publisher current_state_position_publisher, prbt_position_reached_publisher;
-        ros::Publisher operation_mode_publisher;
 
-        ros::Subscriber trajectory_subscriber, dynamic_trajectory_subscriber;
-        ros::Subscriber current_position_subscriber;
+        ros::Subscriber trajectory_subscriber, dynamic_trajectory_subscriber, current_position_subscriber;
 
         trajectory_msgs::JointTrajectory planned_trajectory, next_point;
         control_msgs::JointTrajectoryControllerState current_position;
 
-        bool action_decision = false;
         actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction> *trajectory_client;
 		control_msgs::FollowJointTrajectoryActionGoal trajectory_action;
 		control_msgs::FollowJointTrajectoryGoal trajectory_goal;
@@ -62,14 +58,11 @@ class prbt_bridge {
 
         std_msgs::Bool position_reached;
 
-        ros::Time begin;
+        bool ros_action_use = false, dynamic_planning = false, static_planning = false;
+        bool new_static_trajectory_received = false, new_dynamic_trajectory_received = false;
 
-        bool dynamic_planning = false;
         int trajectory_counter = 0;
-        bool idle_publisher = true;
-        float tolerance = 0;
-        float sampling_time = 0;
-        float position_error = 0;
+        float tolerance = 0, sampling_time = 0, position_error = 0;
 
         void Planned_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &);
         void Current_Position_Callback (const control_msgs::JointTrajectoryControllerState::ConstPtr &);
@@ -77,7 +70,7 @@ class prbt_bridge {
 
         void Compute_Tolerance(trajectory_msgs::JointTrajectory planned_trajectory);
         float Compute_Position_Error (void);
-        void Wait_For_Desired_Position (void);
+        void Wait_For_Desired_Position (bool dynamic);
 
         void Check_Joint_Limits (trajectory_msgs::JointTrajectory *point);
         void Next_Goal (trajectory_msgs::JointTrajectory planned_trajectory, int counter);

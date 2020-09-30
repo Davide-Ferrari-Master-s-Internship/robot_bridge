@@ -7,8 +7,6 @@
  *                                                                                                                          *
  ****************************************************************************************************************************
  *                                                                                                                          *
- *  0. Utilizzo delle ROS Action                                                                                            *
- *                                                                                                                          *
  *  1. Prima traiettoria ricevuta viene inviata interamente al manipolatore                                                 *
  *                                                                                                                          *
  *  2. Un contatore tiene traccia del punto della traiettoria raggiunto dal manipolatore                                    *
@@ -34,8 +32,8 @@
 
 prbt_bridge::prbt_bridge () {
 
-    nh.param("/prbt_Bridge_Node/action_decision", action_decision, true);
-    //ROS_WARN("action decision %d", action_decision);
+    nh.param("/prbt_Bridge_Node/ros_action_use", ros_action_use, true);
+    //ROS_WARN("action decision %d", ros_action_use);
 
     current_position.joint_names = {"empty", "empty", "empty", "empty", "empty", "empty"};
 
@@ -63,7 +61,6 @@ prbt_bridge::prbt_bridge () {
     get_speed_override_client = nh.serviceClient<pilz_msgs::GetSpeedOverride>("/prbt/get_speed_override");
     operation_mode_publisher = nh.advertise<prbt_hardware_support::OperationModes>("/prbt/operation_mode", 1);
 
-    trajectory_counter = 0;
     position_reached.data = false;
 
 }
@@ -73,35 +70,18 @@ prbt_bridge::prbt_bridge () {
 
 
 void prbt_bridge::Planned_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &msg) {
-
+    
+    new_static_trajectory_received = true;
+    static_planning = true;
     planned_trajectory = *msg;
-    dynamic_planning = false;
-
-    while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
-
-        // set operation mode to auto
-        prbt_hardware_support::OperationModes operation_mode;
-        operation_mode.time_stamp = ros::Time::now();
-        operation_mode.value = 3; //AUTO
-        operation_mode_publisher.publish(operation_mode);
-        
-    }
-
-    // Turn off Hold Mode
-    if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
-
-    // Turn off Speed Monitoring (Useless in AUTO Mode)
-    // prbt_monitor_cartesian_speed_srv.request.data = false;
-    // if (prbt_monitor_cartesian_speed_client.call(prbt_monitor_cartesian_speed_srv)) {ROS_INFO("Speed Monitoring Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_monitor_cartesian_speed\"");}
-
-    Publish_Next_Goal(planned_trajectory);
 
 }
 
 void prbt_bridge::Dynamic_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &msg) {
-
-    planned_trajectory = *msg;
+   
+    new_dynamic_trajectory_received = true;
     dynamic_planning = true;
+    planned_trajectory = *msg; 
 
 }
 
@@ -123,7 +103,7 @@ void prbt_bridge::Publish_Next_Goal (trajectory_msgs::JointTrajectory goal) {
 
     // manipulator_joint_trajectory_controller_command_publisher.publish(goal); // old control topic
     
-    if (action_decision) {
+    if (ros_action_use) {
 
         trajectory_goal.trajectory = goal;
         trajectory_client -> waitForServer();
@@ -140,12 +120,10 @@ void prbt_bridge::Publish_Next_Goal (trajectory_msgs::JointTrajectory goal) {
 
 void prbt_bridge::Publish_Trajectory_Counter (int counter) {
 
-    ROS_INFO("Trajectory Counter: %d", counter);
-
     std_msgs::Int32 count;
-
     count.data = counter;
-
+    
+    ROS_INFO("Trajectory Counter: %d", count.data);
     trajectory_counter_publisher.publish(count);
 
 }
@@ -228,28 +206,44 @@ float prbt_bridge::Compute_Position_Error (void) {
 
 }
 
-void prbt_bridge::Wait_For_Desired_Position (void) {
+void prbt_bridge::Wait_For_Desired_Position (bool dynamic) {
 
-    position_error = tolerance + 1;         //needed to enter the while condition  
+    ros::Time begin = ros::Time::now();
 
-    while ((position_error > tolerance) || (fabs((begin - ros::Time::now()).toSec()) < (sampling_time * 0.85))) {    //wait for reaching desired position
+    if (dynamic) {
+
+        position_error = tolerance + 1;     // needed to enter the while condition
+
+        // Wait for Reaching Desired Position
+        while ((position_error > tolerance) || (fabs((begin - ros::Time::now()).toSec()) < (sampling_time * 0.85))) {    
+            
+            ros::spinOnce();
+
+            position_error = Compute_Position_Error();
+
+        if (fabs((begin - ros::Time::now()).toSec()) > 2 * sampling_time) {
+            
+            ROS_ERROR("Wait for Desired Position - Error.");
+            ROS_ERROR("Stop Trajectory Execution.");
+
+            // Force While Exit
+            trajectory_counter = planned_trajectory.points.size();
+
+            return;
+
+            }
+
+        } 
+
+    } else {
         
-        ros::spinOnce();
-
-        position_error = Compute_Position_Error();
-
-    if (fabs((begin - ros::Time::now()).toSec()) > 10 * sampling_time) {
-        
-        ROS_ERROR("Wait for Desired Position Error.");
-        ROS_ERROR("Stop Trajectory Execution.");
-
-        // force while exit
-        trajectory_counter = planned_trajectory.points.size();
-
-        return;
-
+        while (fabs((begin - ros::Time::now()).toSec()) < (sampling_time)) {
+            
+            ros::spinOnce();
+            if (new_static_trajectory_received || new_dynamic_trajectory_received) {break;}
+            
         }
-
+    
     }
 
 }
@@ -262,17 +256,30 @@ void prbt_bridge::spinner (void) {
 
     ros::spinOnce();
 
-    if (dynamic_planning) {
+    if (dynamic_planning && static_planning) {
+
+        ROS_ERROR("You cant' publish on \"/prbt_Planned_Trajectory\" and \"prbt_Dynamic_Trajectory\" at the same time");
+
+        dynamic_planning = false;
+        static_planning = false;
+        new_static_trajectory_received = false;
+        new_dynamic_trajectory_received = false;
+
+        planned_trajectory.points.clear();
+
+    } else if (dynamic_planning) {
 
         while ((trajectory_counter < planned_trajectory.points.size()) && (planned_trajectory.points.size() != 0)) {
 
-            if (trajectory_counter == 0) {  //new trajectory
+            if (trajectory_counter == 0) {  // New Trajectory
+
+                new_dynamic_trajectory_received = false;
 
                 Compute_Tolerance(planned_trajectory);
 
                 while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
 
-                    // set operation mode to auto
+                    // Set Operation Mode to AUTO (Mode 3)
                     prbt_hardware_support::OperationModes operation_mode;
                     operation_mode.time_stamp = ros::Time::now();
                     operation_mode.value = 3; //AUTO
@@ -283,26 +290,26 @@ void prbt_bridge::spinner (void) {
                 // Turn off Hold Mode
                 if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
 
-                // Turn off Speed Monitoring
-                prbt_monitor_cartesian_speed_srv.request.data = false;
-                if (prbt_monitor_cartesian_speed_client.call(prbt_monitor_cartesian_speed_srv)) {ROS_INFO("Speed Monitoring Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_monitor_cartesian_speed\"");}
-
             }
 
-            //final position not reached
+            // Final Position NOT Reached
             position_reached.data = false;
             prbt_position_reached_publisher.publish(position_reached);
 
-            //check the trajectory for dynamic replanning
+            // Check the Trajectory for Dynamic Replanning
             ros::spinOnce();
 
-            Next_Goal(planned_trajectory, trajectory_counter);  //compute next goal
+            // Break if a New Static Trajectory is Received
+            if (new_static_trajectory_received) {break;}
+            else if (new_dynamic_trajectory_received) {new_dynamic_trajectory_received = false;}
 
-            Publish_Trajectory_Counter(trajectory_counter); 
+            // Compute Next Goal
+            Next_Goal(planned_trajectory, trajectory_counter);  
             Publish_Next_Goal(next_point);
+            Publish_Trajectory_Counter(trajectory_counter); 
             
-            begin = ros::Time::now();
-            Wait_For_Desired_Position();    //wait until the tolerance is achieved
+            // Wait Until Position is Reached
+            Wait_For_Desired_Position(true);
 
             trajectory_counter++;
 
@@ -310,23 +317,66 @@ void prbt_bridge::spinner (void) {
 
         if (trajectory_counter != 0) {
 
-                //final position reached
+            if (!new_static_trajectory_received) {
+
+                // Final Position Reached
                 position_reached.data = true;
                 prbt_position_reached_publisher.publish(position_reached);
 
                 // Turn on Hold Mode
                 if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
 
-                trajectory_counter = 0;
-
                 planned_trajectory.points.clear();
-                next_point.points.clear();
+                
+            }
 
-                idle_publisher = true;
-                dynamic_planning = false;
+            next_point.points.clear();
+            trajectory_counter = 0;
+            if (new_static_trajectory_received && !new_dynamic_trajectory_received) {dynamic_planning = false;}
 
         }
     
+    } else if (static_planning) {
+
+        new_static_trajectory_received = false;
+
+        while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
+
+            // Set Operation Mode to AUTO (Mode 3)
+            prbt_hardware_support::OperationModes operation_mode;
+            operation_mode.time_stamp = ros::Time::now();
+            operation_mode.value = 3; //AUTO
+            operation_mode_publisher.publish(operation_mode);
+            
+        }
+
+        // Turn off Hold Mode
+        if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
+
+        Publish_Next_Goal(planned_trajectory);
+
+        // Wait Until Position is Reached
+        Wait_For_Desired_Position(false);
+
+        if (!new_dynamic_trajectory_received && !new_static_trajectory_received) {
+
+            //Final Position Reached
+            position_reached.data = true;
+            prbt_position_reached_publisher.publish(position_reached);
+
+            // Turn on Hold Mode
+            if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
+
+            planned_trajectory.points.clear();
+
+            static_planning = false;
+        
+        } else if (new_dynamic_trajectory_received && !new_static_trajectory_received) {
+
+            static_planning = false;
+
+        }
+
     }
 
 }
