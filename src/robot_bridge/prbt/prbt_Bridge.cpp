@@ -32,9 +32,6 @@
 
 prbt_bridge::prbt_bridge () {
 
-    nh.param("/prbt_Bridge_Node/ros_action_use", ros_action_use, true);
-    //ROS_WARN("action decision %d", ros_action_use);
-
     current_position.joint_names = {"empty", "empty", "empty", "empty", "empty", "empty"};
 
 // Initialize Publishers and Subscribers
@@ -62,6 +59,8 @@ prbt_bridge::prbt_bridge () {
     operation_mode_publisher = nh.advertise<prbt_hardware_support::OperationModes>("/prbt/operation_mode", 1);
 
     position_reached.data = false;
+    new_static_trajectory_received = false;
+    new_dynamic_trajectory_received = false;
 
 }
 
@@ -81,7 +80,7 @@ void prbt_bridge::Dynamic_Trajectory_Callback (const trajectory_msgs::JointTraje
    
     new_dynamic_trajectory_received = true;
     dynamic_planning = true;
-    planned_trajectory = *msg; 
+    planned_trajectory = *msg;
 
 }
 
@@ -100,21 +99,13 @@ void prbt_bridge::Publish_Next_Goal (trajectory_msgs::JointTrajectory goal) {
 
     int end = goal.points.size() - 1;
     ROS_INFO("PRBT GOTO (%.2f;%.2f;%.2f;%.2f;%.2f;%.2f)", goal.points[end].positions[0], goal.points[end].positions[1], goal.points[end].positions[2], goal.points[end].positions[3], goal.points[end].positions[4], goal.points[end].positions[5]);
+    ROS_INFO("Sampling Time: %.2f", sampling_time);
 
     // manipulator_joint_trajectory_controller_command_publisher.publish(goal); // old control topic
     
-    if (ros_action_use) {
-
-        trajectory_goal.trajectory = goal;
-        trajectory_client -> waitForServer();
-        trajectory_client -> sendGoal(trajectory_goal);
-
-    } else {
-
-        trajectory_action.goal.trajectory = goal;
-        manipulator_action_controller_publisher.publish(trajectory_action);
-
-    }
+    trajectory_goal.trajectory = goal;
+    trajectory_client -> waitForServer();
+    trajectory_client -> sendGoal(trajectory_goal);
 
 }
 
@@ -189,18 +180,19 @@ void prbt_bridge::Compute_Tolerance (trajectory_msgs::JointTrajectory planned_tr
     float m = 0.2057, q = -0.0027;
     float a = -0.0368, b = 0.2255, c = -0.0035;
 
-    // tolerance = fabs(a*pow(sampling_time,2) + b*sampling_time + c);
-    tolerance = fabs(m * sampling_time + q);
+    // tolerance_temp = fabs(a*pow(sampling_time,2) + b*sampling_time + c);
+    float tolerance_temp = fabs(m * sampling_time + q);
+    tolerance = std::min(tolerance_temp,float(0.02));
 
     ROS_INFO("Sampling Time: %f",sampling_time);
     ROS_INFO("Position Tolerance: %f",tolerance);
 
 }
 
-float prbt_bridge::Compute_Position_Error (void) {
+float prbt_bridge::Compute_Position_Error (trajectory_msgs::JointTrajectory point) {
 
     std::vector<float> error {0,0,0,0,0,0};
-    for (int i = 0; i < 6; i++) {error[i] = fabs(current_position.desired.positions[i] - next_point.points[0].positions[i]);}
+    for (int i = 0; i < 6; i++) {error[i] = fabs(current_position.desired.positions[i] - point.points[0].positions[i]);}
 
     return (*std::max_element(error.begin(), error.end()));
 
@@ -219,17 +211,17 @@ void prbt_bridge::Wait_For_Desired_Position (bool dynamic) {
             
             ros::spinOnce();
 
-            position_error = Compute_Position_Error();
+            position_error = Compute_Position_Error(next_point);
 
-        if (fabs((begin - ros::Time::now()).toSec()) > 2 * sampling_time) {
+            if (fabs((begin - ros::Time::now()).toSec()) > 2 * sampling_time) {
             
-            ROS_ERROR("Wait for Desired Position - Error.");
-            ROS_ERROR("Stop Trajectory Execution.");
+                ROS_ERROR("Wait for Desired Position - Error.");
+                ROS_ERROR("Stop Trajectory Execution.");
 
-            // Force While Exit
-            trajectory_counter = planned_trajectory.points.size();
+                // Force While Exit
+                trajectory_counter = planned_trajectory.points.size();
 
-            return;
+                break;
 
             }
 
@@ -237,7 +229,7 @@ void prbt_bridge::Wait_For_Desired_Position (bool dynamic) {
 
     } else {
         
-        while (fabs((begin - ros::Time::now()).toSec()) < (sampling_time)) {
+        while (fabs((begin - ros::Time::now()).toSec()) < sampling_time * planned_trajectory.points.size()) {
             
             ros::spinOnce();
             if (new_static_trajectory_received || new_dynamic_trajectory_received) {break;}
@@ -269,11 +261,13 @@ void prbt_bridge::spinner (void) {
 
     } else if (dynamic_planning) {
 
+        trajectory_counter = 0;
+        new_dynamic_trajectory_received = false;
+        new_static_trajectory_received = false;
+
         while ((trajectory_counter < planned_trajectory.points.size()) && (planned_trajectory.points.size() != 0)) {
 
             if (trajectory_counter == 0) {  // New Trajectory
-
-                new_dynamic_trajectory_received = false;
 
                 Compute_Tolerance(planned_trajectory);
 
@@ -332,13 +326,14 @@ void prbt_bridge::spinner (void) {
 
             next_point.points.clear();
             trajectory_counter = 0;
-            if (new_static_trajectory_received && !new_dynamic_trajectory_received) {dynamic_planning = false;}
+            if (!new_dynamic_trajectory_received) {dynamic_planning = false;}
 
         }
     
     } else if (static_planning) {
 
         new_static_trajectory_received = false;
+        new_dynamic_trajectory_received = false;
 
         while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
 
@@ -353,6 +348,7 @@ void prbt_bridge::spinner (void) {
         // Turn off Hold Mode
         if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
 
+        Compute_Tolerance(planned_trajectory);
         Check_Joint_Limits(&planned_trajectory);
         Publish_Next_Goal(planned_trajectory);
 
@@ -369,7 +365,6 @@ void prbt_bridge::spinner (void) {
             if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
 
             planned_trajectory.points.clear();
-
             static_planning = false;
         
         } else if (new_dynamic_trajectory_received && !new_static_trajectory_received) {

@@ -1,14 +1,10 @@
 <launch>
-	
-	<arg name="ros_action_use" default="true" />
 
 	<!--	Robot Bridge Node	-->
 	<node pkg="robot_bridge" type="Robot_Bridge_Node" name="Robot_Bridge_Node" output="screen"/>
 
 	<!--	prbt Bridge Node	-->
-	<node pkg="robot_bridge" type="prbt_Bridge_Node" name="prbt_Bridge_Node" output="screen">
-		<param name="ros_action_use" value="$(arg ros_action_use)"/>	
-	</node>
+	<node pkg="robot_bridge" type="prbt_Bridge_Node" name="prbt_Bridge_Node" output="screen"/>
 
 	<!--	mpo Bridge Node	-->
 	<node pkg="robot_bridge" type="mpo_500_Bridge_Node" name="mpo_500_Bridge_Node" output="screen"/>

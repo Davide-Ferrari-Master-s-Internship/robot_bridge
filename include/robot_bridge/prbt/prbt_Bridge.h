@@ -58,7 +58,7 @@ class prbt_bridge {
 
         std_msgs::Bool position_reached;
 
-        bool ros_action_use = false, dynamic_planning = false, static_planning = false;
+        bool dynamic_planning = false, static_planning = false;
         bool new_static_trajectory_received = false, new_dynamic_trajectory_received = false;
 
         int trajectory_counter = 0;
@@ -69,7 +69,7 @@ class prbt_bridge {
         void Dynamic_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &);
 
         void Compute_Tolerance(trajectory_msgs::JointTrajectory planned_trajectory);
-        float Compute_Position_Error (void);
+        float Compute_Position_Error (trajectory_msgs::JointTrajectory point);
         void Wait_For_Desired_Position (bool dynamic);
 
         void Check_Joint_Limits (trajectory_msgs::JointTrajectory *point);
