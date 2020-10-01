@@ -10,6 +10,10 @@ There is an upper level node that split a custom trajectory message (manipulator
 
 The other two nodes use thoose message to control directly the manipulator and the mobile base.
 
+If the maximum joint acceleration limit error is displayed, you need to set the acceleration limits for each joint in the configuration file in the prbt_support package by editing the file:
+
+```prbt_support/config/manipulator_controller.yaml```
+
 ## Running the tests
 
 Run the node
