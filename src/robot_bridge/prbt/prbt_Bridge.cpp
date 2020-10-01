@@ -318,7 +318,7 @@ void prbt_bridge::spinner (void) {
                 position_reached.data = true;
                 prbt_position_reached_publisher.publish(position_reached);
 
-                // Turn on Hold Mode
+                // Turn on Hold Mode (Sleep Necessary for Stop Precision)
                 ros::Duration(1).sleep();
                 if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
 
@@ -363,7 +363,7 @@ void prbt_bridge::spinner (void) {
             position_reached.data = true;
             prbt_position_reached_publisher.publish(position_reached);
 
-            // Turn on Hold Mode
+            // Turn on Hold Mode (Sleep Necessary for Stop Precision)
             ros::Duration(1).sleep();
             if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
 
