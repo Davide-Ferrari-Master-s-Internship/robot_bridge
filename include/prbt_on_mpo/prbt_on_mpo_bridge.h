@@ -1,5 +1,5 @@
-#ifndef ROBOT_BRIDGE_H
-#define ROBOT_BRIDGE_H
+#ifndef PRBT_ON_MPO_BRIDGE_H
+#define PRBT_ON_MPO_BRIDGE_H
 
 #include "ros/ros.h"
 #include "trajectory_msgs/JointTrajectory.h"
@@ -34,4 +34,4 @@ class bridge {
 
 };
 
-#endif /* ROBOT_BRIDGE_H */
+#endif /* PRBT_ON_MPO_BRIDGE_H */

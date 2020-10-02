@@ -16,9 +16,17 @@ If the maximum joint acceleration limit error is displayed, you need to set the 
 
 ## Running the tests
 
-Run the node
+Run PRBT6 Bridge:
 
-```roslaunch robot_bridge bridge.launch```
+```roslaunch robot_bridge prbt_bridge.launch```
+
+Run MPO_500 Bridge:
+
+```roslaunch robot_bridge mpo_500_bridge.launch```
+
+Run PRBT6 + MPO 500 Bridge:
+
+```roslaunch robot_bridge prbt+mpo_bridge.launch```
 
 ## Version
 

@@ -1,0 +1,6 @@
+<launch>
+
+	<!--	MPO 500 Bridge Node	-->
+	<node pkg="robot_bridge" type="mpo_500_Bridge_Node" name="mpo_500_Bridge_Node" output="screen"/>
+
+</launch>

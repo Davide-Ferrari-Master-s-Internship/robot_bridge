@@ -1,4 +1,4 @@
-#include "robot_bridge/prbt/prbt_Bridge.h"
+#include "prbt_bridge/prbt_bridge.h"
 
 
 int main(int argc, char **argv) {

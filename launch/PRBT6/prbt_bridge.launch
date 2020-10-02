@@ -1,0 +1,6 @@
+<launch>
+
+	<!--	PRBT6 Bridge Node	-->
+	<node pkg="robot_bridge" type="prbt_Bridge_Node" name="prbt_Bridge_Node" output="screen"/>
+
+</launch>

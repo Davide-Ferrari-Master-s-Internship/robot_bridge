@@ -45,21 +45,21 @@ include_directories(
 
 # Bridge
 
-add_executable(Robot_Bridge_Node 
-	src/robot_bridge/Robot_Bridge_Node.cpp 
-	src/robot_bridge/Robot_Bridge.cpp)
-target_link_libraries(Robot_Bridge_Node ${catkin_LIBRARIES})
-add_dependencies(Robot_Bridge_Node ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_executable(prbt_on_mpo_Bridge_Node 
+	src/prbt_on_mpo/prbt_on_mpo_bridge_Node.cpp 
+	src/prbt_on_mpo/prbt_on_mpo_bridge.cpp)
+target_link_libraries(prbt_on_mpo_Bridge_Node ${catkin_LIBRARIES})
+add_dependencies(prbt_on_mpo_Bridge_Node ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
 add_executable(mpo_500_Bridge_Node 
-	src/robot_bridge/mpo_500/mpo_500_Bridge_Node.cpp 
-	src/robot_bridge/mpo_500/mpo_500_Bridge.cpp)
+	src/mpo_500_bridge/mpo_500_bridge_Node.cpp 
+	src/mpo_500_bridge/mpo_500_bridge.cpp)
 target_link_libraries(mpo_500_Bridge_Node ${catkin_LIBRARIES})
 add_dependencies(mpo_500_Bridge_Node ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
 add_executable(prbt_Bridge_Node 
-	src/robot_bridge/prbt/prbt_Bridge_Node.cpp 
-	src/robot_bridge/prbt/prbt_Bridge.cpp)
+	src/prbt_bridge/prbt_bridge_Node.cpp 
+	src/prbt_bridge/prbt_bridge.cpp)
 target_link_libraries(prbt_Bridge_Node ${catkin_LIBRARIES})
 add_dependencies(prbt_Bridge_Node ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
 

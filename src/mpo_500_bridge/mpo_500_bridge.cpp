@@ -1,5 +1,4 @@
-#include "robot_bridge/mpo_500/mpo_500_Bridge.h"
-
+#include "mpo_500_bridge/mpo_500_bridge.h"
 
 //----------------------------------------------------- CONSTRUCTOR -----------------------------------------------------//
 
