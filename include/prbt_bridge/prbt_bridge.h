@@ -42,7 +42,7 @@ class prbt_bridge {
         ros::Publisher manipulator_action_controller_publisher, trajectory_counter_publisher, operation_mode_publisher;
         ros::Publisher current_state_position_publisher, prbt_position_reached_publisher;
 
-        ros::Subscriber trajectory_subscriber, dynamic_trajectory_subscriber, current_position_subscriber;
+        ros::Subscriber trajectory_subscriber, dynamic_trajectory_subscriber, single_point_trajectory_subscriber, current_position_subscriber;
 
         trajectory_msgs::JointTrajectory planned_trajectory, next_point;
         control_msgs::JointTrajectoryControllerState current_position;
@@ -58,8 +58,11 @@ class prbt_bridge {
 
         std_msgs::Bool position_reached;
 
-        bool dynamic_planning = false, static_planning = false;
-        bool new_static_trajectory_received = false, new_dynamic_trajectory_received = false;
+        ros::Time last_message;
+
+        bool dynamic_planning = false, static_planning = false, single_planning = false;
+        bool first_single_planning = true;
+        bool new_static_trajectory_received = false, new_dynamic_trajectory_received = false, new_single_point_trajectory_received = false;
 
         int trajectory_counter = 0;
         float tolerance = 0, sampling_time = 0, position_error = 0;
@@ -67,6 +70,8 @@ class prbt_bridge {
         void Planned_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &);
         void Current_Position_Callback (const control_msgs::JointTrajectoryControllerState::ConstPtr &);
         void Dynamic_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &);
+        void Single_Point_Trajectory_Callback (const trajectory_msgs::JointTrajectory::ConstPtr &);
+
 
         void Compute_Tolerance(trajectory_msgs::JointTrajectory planned_trajectory);
         float Compute_Position_Error (trajectory_msgs::JointTrajectory point);
