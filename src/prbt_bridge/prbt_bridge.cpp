@@ -31,6 +31,8 @@
 
 prbt_bridge::prbt_bridge () {
 
+    nh.param("/prbt_Bridge/simulation", simulation, false);
+
     current_position.joint_names = {"empty", "empty", "empty", "empty", "empty", "empty"};
 
 // Initialize Publishers and Subscribers
@@ -42,13 +44,13 @@ prbt_bridge::prbt_bridge () {
 
     trajectory_counter_publisher = nh.advertise<std_msgs::Int32>("/Robot_Bridge/prbt_Trajectory_Counter", 1);
     current_state_position_publisher = nh.advertise<control_msgs::JointTrajectoryControllerState>("/Robot_Bridge/prbt_Current_State_Position", 1000);
-    prbt_position_reached_publisher = nh.advertise<std_msgs::Bool>("/Robot_Bridge/prbt_Position_Reached", 1);    
-    // manipulator_joint_trajectory_controller_command_publisher = nh.advertise<trajectory_msgs::JointTrajectory>("/prbt/manipulator_joint_trajectory_controller/command", 1);
+    prbt_position_reached_publisher = nh.advertise<std_msgs::Bool>("/Robot_Bridge/prbt_Position_Reached", 1);
+    manipulator_joint_trajectory_controller_command_publisher = nh.advertise<trajectory_msgs::JointTrajectory>("/prbt/manipulator_joint_trajectory_controller/command", 1);
+
 
 // Trajectory Control Actions
 
     trajectory_client = new actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction>("/prbt/manipulator_joint_trajectory_controller/follow_joint_trajectory", true);
-    manipulator_action_controller_publisher = nh.advertise<control_msgs::FollowJointTrajectoryActionGoal>("/prbt/manipulator_joint_trajectory_controller/follow_joint_trajectory/goal", 1);
 
 // Operation Mode
 
@@ -118,11 +120,20 @@ void prbt_bridge::Publish_Next_Goal (trajectory_msgs::JointTrajectory goal) {
     ROS_INFO("PRBT GOTO (%.2f;%.2f;%.2f;%.2f;%.2f;%.2f)", goal.points[end].positions[0], goal.points[end].positions[1], goal.points[end].positions[2], goal.points[end].positions[3], goal.points[end].positions[4], goal.points[end].positions[5]);
     ROS_INFO("Sampling Time: %.2f", sampling_time);
 
-    // manipulator_joint_trajectory_controller_command_publisher.publish(goal); // old control topic
+    if (simulation) {
+
+        manipulator_joint_trajectory_controller_command_publisher.publish(goal);
+
+
+    } else {
+
+        trajectory_goal.trajectory = goal;
+        trajectory_client -> waitForServer();
+        trajectory_client -> sendGoal(trajectory_goal);
+
+    }
+
     
-    trajectory_goal.trajectory = goal;
-    trajectory_client -> waitForServer();
-    trajectory_client -> sendGoal(trajectory_goal);
 
 }
 
@@ -292,18 +303,22 @@ void prbt_bridge::spinner (void) {
 
                 Compute_Tolerance(planned_trajectory);
 
-                while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
+                if (!simulation) {
 
-                    // Set Operation Mode to AUTO (Mode 3)
-                    prbt_hardware_support::OperationModes operation_mode;
-                    operation_mode.time_stamp = ros::Time::now();
-                    operation_mode.value = 3; //AUTO
-                    operation_mode_publisher.publish(operation_mode);
-                    
+                    while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
+
+                        // Set Operation Mode to AUTO (Mode 3)
+                        prbt_hardware_support::OperationModes operation_mode;
+                        operation_mode.time_stamp = ros::Time::now();
+                        operation_mode.value = 3; //AUTO
+                        operation_mode_publisher.publish(operation_mode);
+                        
+                    }
+
+                    // Turn off Hold Mode
+                    if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
+
                 }
-
-                // Turn off Hold Mode
-                if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
 
             }
 
@@ -338,9 +353,13 @@ void prbt_bridge::spinner (void) {
                 position_reached.data = true;
                 prbt_position_reached_publisher.publish(position_reached);
 
-                // Turn on Hold Mode (Sleep Necessary for Stop Precision)
-                ros::Duration(1).sleep();
-                if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
+                if (!simulation) {
+
+                    // Turn on Hold Mode (Sleep Necessary for Stop Precision)
+                    ros::Duration(1).sleep();
+                    if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
+                
+                }
 
                 planned_trajectory.points.clear();
                 
@@ -357,19 +376,23 @@ void prbt_bridge::spinner (void) {
         new_static_trajectory_received = false;
         new_dynamic_trajectory_received = false;
         new_single_point_trajectory_received = false;
+        
+        if (!simulation) {
 
-        while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
+            while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
 
-            // Set Operation Mode to AUTO (Mode 3)
-            prbt_hardware_support::OperationModes operation_mode;
-            operation_mode.time_stamp = ros::Time::now();
-            operation_mode.value = 3; //AUTO
-            operation_mode_publisher.publish(operation_mode);
-            
+                // Set Operation Mode to AUTO (Mode 3)
+                prbt_hardware_support::OperationModes operation_mode;
+                operation_mode.time_stamp = ros::Time::now();
+                operation_mode.value = 3; //AUTO
+                operation_mode_publisher.publish(operation_mode);
+                
+            }
+
+            // Turn off Hold Mode
+            if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
+
         }
-
-        // Turn off Hold Mode
-        if (prbt_unhold_client.call(prbt_unhold_srv)) {ROS_INFO("Hold Mode Deactivated");} else {ROS_ERROR("Failed to Call Service: \"prbt_unhold\"");}
 
         Compute_Tolerance(planned_trajectory);
         Check_Joint_Limits(&planned_trajectory);
@@ -384,10 +407,14 @@ void prbt_bridge::spinner (void) {
             position_reached.data = true;
             prbt_position_reached_publisher.publish(position_reached);
 
-            // Turn on Hold Mode (Sleep Necessary for Stop Precision)
-            ros::Duration(1).sleep();
-            if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
+            if (!simulation) {
 
+                // Turn on Hold Mode (Sleep Necessary for Stop Precision)
+                ros::Duration(1).sleep();
+                if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
+            
+            }
+            
             planned_trajectory.points.clear();
             static_planning = false;
         
@@ -399,7 +426,7 @@ void prbt_bridge::spinner (void) {
 
     } else if (single_planning) {
 
-        if (first_single_planning) {
+        if (first_single_planning && !simulation) {
 
             while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
 
@@ -429,8 +456,12 @@ void prbt_bridge::spinner (void) {
 
         last_message = ros::Time::now();
 
-        // Turn on Hold Mode (Sleep Necessary for Stop Precision)
-        if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
+        if (!simulation) {
+
+            // Turn on Hold Mode (Sleep Necessary for Stop Precision)
+            if (prbt_hold_client.call(prbt_hold_srv)) {ROS_INFO("Hold Mode Activated");} else {ROS_ERROR("Failed to Call Service: \"prbt_hold\"");}
+        
+        }
 
         first_single_planning = false;
         static_planning = false; dynamic_planning = false; single_planning = false;

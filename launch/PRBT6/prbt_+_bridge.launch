@@ -1,4 +1,6 @@
 <launch>
+	
+	<arg name="simulation" default="false"/>
 
 	<!--	prbt launchfile	-->
   <include file="$(find robot_bridge)/launch/PRBT6/moveit_planning_execution.launch">
@@ -9,6 +11,8 @@
   </include>
   
 	<!--	bridge launch file	-->
-  <include file="$(find robot_bridge)/launch/PRBT6/prbt_bridge.launch"/>
+  <include file="$(find robot_bridge)/launch/PRBT6/prbt_bridge.launch">
+		<arg name="simulation" value="$(arg simulation)"/>
+	</include>
 
 </launch>

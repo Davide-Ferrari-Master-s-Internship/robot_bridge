@@ -1,10 +1,14 @@
 <launch>
 
+	<arg name="simulation" default="false"/>
+
 	<!--	Robot Bridge Node	-->
 	<node pkg="robot_bridge" type="prbt_on_mpo_Bridge_Node" name="prbt_on_mpo_Bridge_Node" output="screen"/>
 
 	<!--	PRBT6 Bridge Node	-->
-	<node pkg="robot_bridge" type="prbt_Bridge_Node" name="prbt_Bridge_Node" output="screen"/>
+	<node pkg="robot_bridge" type="prbt_Bridge_Node" name="prbt_Bridge_Node" output="screen">
+		<param name="simulation" value="$(arg simulation)"/>
+	</node>
 
 	<!--	MPO 500 Bridge Node	-->
 	<node pkg="robot_bridge" type="mpo_500_Bridge_Node" name="mpo_500_Bridge_Node" output="screen"/>

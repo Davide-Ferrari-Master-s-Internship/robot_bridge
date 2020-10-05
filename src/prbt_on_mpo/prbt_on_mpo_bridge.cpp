@@ -21,11 +21,11 @@ void bridge::Rossini_Planned_Trajectory_Callback(const robot_bridge::planned_tra
     prbt_trajectory = rossini_trajectory.manipulator_trajectory;
 
     mpo_500_velocity = rossini_trajectory.base_velocity;
-    mpo_500_trajectory = rossini_trajectory.base_trajectory;
+    // mpo_500_trajectory = rossini_trajectory.base_trajectory;
 
     prbt_trajectory_publisher.publish(prbt_trajectory);
     mpo_500_velocity_publisher.publish(mpo_500_velocity);
-    mpo_500_trajectory_publisher.publish(mpo_500_trajectory);
+    // mpo_500_trajectory_publisher.publish(mpo_500_trajectory);
 
 }
 

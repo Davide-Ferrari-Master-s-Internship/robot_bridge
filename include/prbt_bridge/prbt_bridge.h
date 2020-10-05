@@ -38,8 +38,8 @@ class prbt_bridge {
 
         ros::NodeHandle nh;
 
-        // ros::Publisher manipulator_joint_trajectory_controller_command_publisher; // OLD PUBLISHER TOPIC
-        ros::Publisher manipulator_action_controller_publisher, trajectory_counter_publisher, operation_mode_publisher;
+        ros::Publisher manipulator_joint_trajectory_controller_command_publisher; // OLD PUBLISHER TOPIC
+        ros::Publisher trajectory_counter_publisher, operation_mode_publisher;
         ros::Publisher current_state_position_publisher, prbt_position_reached_publisher;
 
         ros::Subscriber trajectory_subscriber, dynamic_trajectory_subscriber, single_point_trajectory_subscriber, current_position_subscriber;
@@ -60,6 +60,7 @@ class prbt_bridge {
 
         ros::Time last_message;
 
+        bool simulation = false;
         bool dynamic_planning = false, static_planning = false, single_planning = false;
         bool first_single_planning = true;
         bool new_static_trajectory_received = false, new_dynamic_trajectory_received = false, new_single_point_trajectory_received = false;

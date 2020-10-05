@@ -1,6 +1,10 @@
 <launch>
+	
+	<arg name="simulation" default="false"/>
 
 	<!--	PRBT6 Bridge Node	-->
-	<node pkg="robot_bridge" type="prbt_Bridge_Node" name="prbt_Bridge_Node" output="screen"/>
+	<node pkg="robot_bridge" type="prbt_Bridge_Node" name="prbt_Bridge_Node" output="screen">
+		<param name="simulation" value="$(arg simulation)"/>
+	</node>
 
 </launch>
