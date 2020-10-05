@@ -31,7 +31,7 @@
 
 prbt_bridge::prbt_bridge () {
 
-    nh.param("/prbt_Bridge/simulation", simulation, false);
+    nh.param("/prbt_Bridge_Node/simulation", simulation, false);
 
     current_position.joint_names = {"empty", "empty", "empty", "empty", "empty", "empty"};
 
