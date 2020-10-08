@@ -212,7 +212,7 @@ void prbt_bridge::Compute_Tolerance (trajectory_msgs::JointTrajectory planned_tr
     float tolerance_temp = fabs(m * sampling_time + q);
     tolerance = std::min(tolerance_temp,float(0.02));
 
-    ROS_INFO("Sampling Time: %f",sampling_time);
+    // ROS_INFO("Sampling Time: %f",sampling_time);
     ROS_INFO("Position Tolerance: %f",tolerance);
 
 }
