@@ -58,7 +58,7 @@ prbt_bridge::prbt_bridge () {
     prbt_hold_client = nh.serviceClient<std_srvs::Trigger>("/prbt/manipulator_joint_trajectory_controller/hold");
     prbt_monitor_cartesian_speed_client = nh.serviceClient<std_srvs::SetBool>("/prbt/manipulator_joint_trajectory_controller/monitor_cartesian_speed");
     get_speed_override_client = nh.serviceClient<pilz_msgs::GetSpeedOverride>("/prbt/get_speed_override");
-    operation_mode_publisher = nh.advertise<prbt_hardware_support::OperationModes>("/prbt/operation_mode", 1);
+    operation_mode_publisher = nh.advertise<robot_bridge::OperationModes>("/prbt/operation_mode", 1);
 
     position_reached.data = false;
     new_static_trajectory_received = false;
@@ -308,7 +308,7 @@ void prbt_bridge::spinner (void) {
                     while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
 
                         // Set Operation Mode to AUTO (Mode 3)
-                        prbt_hardware_support::OperationModes operation_mode;
+                        robot_bridge::OperationModes operation_mode;
                         operation_mode.time_stamp = ros::Time::now();
                         operation_mode.value = 3; //AUTO
                         operation_mode_publisher.publish(operation_mode);
@@ -382,7 +382,7 @@ void prbt_bridge::spinner (void) {
             while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
 
                 // Set Operation Mode to AUTO (Mode 3)
-                prbt_hardware_support::OperationModes operation_mode;
+                robot_bridge::OperationModes operation_mode;
                 operation_mode.time_stamp = ros::Time::now();
                 operation_mode.value = 3; //AUTO
                 operation_mode_publisher.publish(operation_mode);
@@ -431,7 +431,7 @@ void prbt_bridge::spinner (void) {
             while (get_speed_override_client.call(get_speed_override_srv) && (get_speed_override_srv.response.speed_override == 0.0)) {
 
                 // Set Operation Mode to AUTO (Mode 3)
-                prbt_hardware_support::OperationModes operation_mode;
+                robot_bridge::OperationModes operation_mode;
                 operation_mode.time_stamp = ros::Time::now();
                 operation_mode.value = 3; //AUTO
                 operation_mode_publisher.publish(operation_mode);

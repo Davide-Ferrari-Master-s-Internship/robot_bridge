@@ -11,7 +11,7 @@
 #include "control_msgs/FollowJointTrajectoryActionGoal.h"
 #include "control_msgs/FollowJointTrajectoryAction.h"
 #include "actionlib/client/simple_action_client.h"
-#include "prbt_hardware_support/OperationModes.h"
+#include "robot_bridge/OperationModes.h"
 #include "pilz_msgs/GetSpeedOverride.h"
 
 #include "prbt_hardware_support/BrakeTest.h"

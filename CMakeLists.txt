@@ -20,6 +20,7 @@ add_message_files(
   FILES
   planned_trajectory_msg.msg
   geometry_trajectory_msg.msg
+  OperationModes.msg
 )
 
 generate_messages(
